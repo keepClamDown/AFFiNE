@@ -7,5 +7,7 @@ public enum ByokProvider: String, EnumType {
   case anthropic = "anthropic"
   case fal = "fal"
   case gemini = "gemini"
+  case gemma = "gemma"
+  case glm = "glm"
   case openai = "openai"
 }

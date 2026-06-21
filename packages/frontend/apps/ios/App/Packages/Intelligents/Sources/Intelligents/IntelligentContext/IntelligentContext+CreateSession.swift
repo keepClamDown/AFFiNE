@@ -40,7 +40,7 @@ public extension IntelligentContext {
           workspaceId: workspaceId,
           docId: docId,
           promptName: promptName.rawValue,
-          model: nil,
+          model: self.currentModelCatalog?.selectedModelId ?? self.currentModelCatalog?.defaultModelId,
           pinned: pinned,
           tokens: 0,
           createdAt: DateTime(date: Date()),

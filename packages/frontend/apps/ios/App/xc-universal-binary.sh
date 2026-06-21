@@ -44,17 +44,26 @@ SRC_ROOT=${2}
 # buildvariant from our xcconfigs
 BUILDVARIANT=$(echo "${3}" | tr '[:upper:]' '[:lower:]')
 
-RELFLAG=
+BUILD_OUTPUT_DIR=debug
+BUILD_MODE_FLAG=()
 if [[ "${BUILDVARIANT}" != "debug" ]]; then
-    RELFLAG=release
-else
-    RELFLAG=debug
+    BUILD_OUTPUT_DIR=release
+    BUILD_MODE_FLAG=(--release)
 fi
 
+TARGET_ROOT="${CARGO_TARGET_DIR:-$SRC_ROOT/../../../target}"
 IS_SIMULATOR=0
 if [ "${LLVM_TARGET_TRIPLE_SUFFIX-}" = "-simulator" ]; then
   IS_SIMULATOR=1
 fi
+
+SIMULATOR_LIBS=()
+BINDGEN_LIBRARY=""
+
+build_rust_target() {
+  local target="$1"
+  "$CARGO" rustc -p "${FFI_TARGET}" --lib --crate-type staticlib "${BUILD_MODE_FLAG[@]}" --target "$target" --features use-as-lib
+}
 
 for arch in $ARCHS; do
   case "$arch" in
@@ -66,20 +75,36 @@ for arch in $ARCHS; do
 
       # Intel iOS simulator
       export CFLAGS_x86_64_apple_ios="-target x86_64-apple-ios"
-      $CARGO rustc -p "${FFI_TARGET}" --lib --crate-type staticlib --$RELFLAG --target x86_64-apple-ios --features use-as-lib
+      build_rust_target x86_64-apple-ios
+      SIMULATOR_LIBS+=("$TARGET_ROOT/x86_64-apple-ios/${BUILD_OUTPUT_DIR}/lib${FFI_TARGET}.a")
       ;;
 
     arm64)
       if [ $IS_SIMULATOR -eq 0 ]; then
         # Hardware iOS targets
-        $CARGO rustc -p "${FFI_TARGET}" --lib --crate-type staticlib --$RELFLAG --target aarch64-apple-ios --features use-as-lib
-        cp $SRC_ROOT/../../../target/aarch64-apple-ios/${RELFLAG}/lib${FFI_TARGET}.a $SRCROOT/lib${FFI_TARGET}.a
+        build_rust_target aarch64-apple-ios
+        BINDGEN_LIBRARY="$TARGET_ROOT/aarch64-apple-ios/${BUILD_OUTPUT_DIR}/lib${FFI_TARGET}.a"
+        cp "$BINDGEN_LIBRARY" "$SRCROOT/lib${FFI_TARGET}.a"
       else
-        # M1 iOS simulator
-        $CARGO rustc -p "${FFI_TARGET}" --lib --crate-type staticlib --$RELFLAG --target aarch64-apple-ios-sim --features use-as-lib
-        cp $SRC_ROOT/../../../target/aarch64-apple-ios-sim/${RELFLAG}/lib${FFI_TARGET}.a $SRCROOT/lib${FFI_TARGET}.a
+        # Apple Silicon iOS simulator
+        build_rust_target aarch64-apple-ios-sim
+        SIMULATOR_LIBS+=("$TARGET_ROOT/aarch64-apple-ios-sim/${BUILD_OUTPUT_DIR}/lib${FFI_TARGET}.a")
       fi
+      ;;
   esac
 done
 
-$CARGO run -p affine_mobile_native --features use-as-lib --bin uniffi-bindgen generate --library $SRCROOT/lib${FFI_TARGET}.a --language swift --out-dir $SRCROOT/../../ios/App/App/uniffi
+if [ $IS_SIMULATOR -eq 1 ]; then
+  if [ "${#SIMULATOR_LIBS[@]}" -eq 0 ]; then
+    echo "No simulator Rust libraries were built." >&2
+    exit 1
+  fi
+  BINDGEN_LIBRARY="${SIMULATOR_LIBS[0]}"
+  if [ "${#SIMULATOR_LIBS[@]}" -eq 1 ]; then
+    cp "$BINDGEN_LIBRARY" "$SRCROOT/lib${FFI_TARGET}.a"
+  else
+    lipo -create "${SIMULATOR_LIBS[@]}" -output "$SRCROOT/lib${FFI_TARGET}.a"
+  fi
+fi
+
+$CARGO run -p affine_mobile_native --features use-as-lib --bin uniffi-bindgen generate --library "$BINDGEN_LIBRARY" --language swift --out-dir "$SRCROOT/../../ios/App/App/uniffi"

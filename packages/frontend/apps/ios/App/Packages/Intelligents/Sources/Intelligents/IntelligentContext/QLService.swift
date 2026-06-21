@@ -152,6 +152,36 @@ public final class QLService {
     }
   }
 
+  public func fetchPromptModels(
+    promptName: String,
+    completion: @escaping (GetPromptModelsQuery.Data.CurrentUser.Copilot.Models?) -> Void
+  ) {
+    client.fetch(query: GetPromptModelsQuery(promptName: promptName)) { result in
+      switch result {
+      case let .success(graphQLResult):
+        completion(graphQLResult.data?.currentUser?.copilot.models)
+      case .failure:
+        completion(nil)
+      }
+    }
+  }
+
+  public func fetchWorkspaceByokSettings(
+    workspaceId: String,
+    completion: @escaping (WorkspaceByokSettingsQuery.Data.Workspace.ByokSettings?) -> Void
+  ) {
+    let to = DateTime(date: Date())
+    let from = DateTime(date: Date().addingTimeInterval(-7 * 24 * 60 * 60))
+    client.fetch(query: WorkspaceByokSettingsQuery(id: workspaceId, from: from, to: to)) { result in
+      switch result {
+      case let .success(graphQLResult):
+        completion(graphQLResult.data?.workspace.byokSettings)
+      case .failure:
+        completion(nil)
+      }
+    }
+  }
+
   public func searchDocuments(
     workspaceId: String,
     keyword: String,

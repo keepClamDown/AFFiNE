@@ -11,10 +11,15 @@ import ApolloAPI
 import UIKit
 
 extension IntelligentContext {
-  func prepareMetadataFromGraphQlClient(completion: @escaping ([QLMetadataKey: Any]) -> Void) {
+  func prepareMetadataFromGraphQlClient(
+    workspaceId: String,
+    completion: @escaping ([QLMetadataKey: Any]) -> Void
+  ) {
     var newMetadata: [QLMetadataKey: Any] = [:]
     let dispatchGroup = DispatchGroup()
     let service = QLService.shared
+    var promptModels: GetPromptModelsQuery.Data.CurrentUser.Copilot.Models?
+    var byokSettings: WorkspaceByokSettingsQuery.Data.Workspace.ByokSettings?
 
     dispatchGroup.enter()
     service.fetchCurrentUser { user in
@@ -66,7 +71,26 @@ extension IntelligentContext {
       dispatchGroup.leave()
     }
 
+    dispatchGroup.enter()
+    service.fetchPromptModels(promptName: "Chat With AFFiNE AI") { models in
+      promptModels = models
+      dispatchGroup.leave()
+    }
+
+    dispatchGroup.enter()
+    service.fetchWorkspaceByokSettings(workspaceId: workspaceId) { settings in
+      byokSettings = settings
+      dispatchGroup.leave()
+    }
+
     dispatchGroup.notify(queue: .main) {
+      if let modelCatalog = IntelligentContext.buildModelCatalog(
+        promptModels: promptModels,
+        byokSettings: byokSettings,
+        selectedModelId: nil
+      ) {
+        newMetadata[.modelCatalogKey] = modelCatalog
+      }
       completion(newMetadata)
     }
   }
