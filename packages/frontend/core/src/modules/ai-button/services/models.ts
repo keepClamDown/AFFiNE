@@ -8,17 +8,14 @@ import { LiveData, Service } from '@toeverything/infra';
 
 import type { GraphQLService, SubscriptionService } from '../../cloud';
 import type { GlobalStateService } from '../../storage';
+import {
+  type AIModelCatalogItem,
+  buildAIModelCatalogSnapshot,
+} from './catalog';
 
 const AI_MODEL_ID_KEY = 'AIModelId';
 
-export interface AIModel {
-  name: string;
-  id: string;
-  version: string;
-  category: string;
-  isPro: boolean;
-  isDefault: boolean;
-}
+export interface AIModel extends AIModelCatalogItem {}
 
 export class AIModelService extends Service {
   modelId: Signal<string | undefined>;
@@ -85,19 +82,10 @@ export class AIModelService extends Service {
     const promptName = prompt || 'Chat With AFFiNE AI';
     const models = await this.getModelsByPrompt(promptName);
     if (models) {
-      const { defaultModel, optionalModels, proModels } = models;
-      this.models.value = optionalModels.map(model => {
-        const [category] = model.name.split(' ');
-        const version = model.name.slice(category.length + 1);
-        return {
-          name: model.name,
-          id: model.id,
-          version,
-          category,
-          isPro: proModels.some(proModel => proModel.id === model.id),
-          isDefault: model.id === defaultModel,
-        };
-      });
+      this.models.value = buildAIModelCatalogSnapshot({
+        selectedModelId: this.modelId.value,
+        promptModels: models,
+      }).models;
     }
   };
 

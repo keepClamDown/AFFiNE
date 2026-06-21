@@ -8,6 +8,7 @@ import { useService } from '@toeverything/infra';
 import { useEffect } from 'react';
 
 import { AboutGroup } from './about';
+import { AIModelsGroup } from './ai-models';
 import { AppearanceGroup } from './appearance';
 import { ExperimentalFeatureSetting } from './experimental';
 import { OthersGroup } from './others';
@@ -26,6 +27,7 @@ const MobileSetting = () => {
       <UserProfile />
       <UserSubscription />
       <UserUsage />
+      <AIModelsGroup />
       <AppearanceGroup />
       <AboutGroup />
       <ExperimentalFeatureSetting />
