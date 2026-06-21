@@ -5,6 +5,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   BadRequest,
   Cache,
+  Config,
   CryptoHelper,
   metrics,
   safeFetch,
@@ -13,7 +14,6 @@ import { Models } from '../../../models';
 import type { CopilotProviderProfile } from '../config';
 import { ByokEntitlementPolicy } from './policy';
 import {
-  BYOK_ALLOWED_PROVIDERS,
   type ByokFeatureKind,
   ByokKeyStorage,
   ByokKeyTestStatus,
@@ -27,6 +27,10 @@ const LOCAL_LEASE_TTL_MS = 10 * 60 * 1000;
 const BYOK_PROFILE_PRIORITY_BASE = 10_000;
 const SERVER_PROFILE_PRIORITY_OFFSET = 2_000;
 const TEST_TIMEOUT_MS = 10_000;
+const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const DEFAULT_GLM_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
+const DEFAULT_GEMMA_BASE_URL =
+  'https://generativelanguage.googleapis.com/v1beta/openai';
 
 export type ByokProviderRequestContext = {
   userId?: string;
@@ -115,11 +119,16 @@ export class ByokService {
     private readonly models: Models,
     private readonly crypto: CryptoHelper,
     private readonly cache: Cache,
-    private readonly entitlement: ByokEntitlementPolicy
+    private readonly entitlement: ByokEntitlementPolicy,
+    private readonly config: Config
   ) {}
 
   get customEndpointSupported() {
-    return env.selfhosted;
+    return env.selfhosted || this.config.copilot.byok.allowCustomEndpoint;
+  }
+
+  private get allowedProviders() {
+    return this.config.copilot.byok.allowedProviders.filter(isByokProvider);
   }
 
   async getSettings(
@@ -134,7 +143,7 @@ export class ByokService {
         localEntitled: false,
         entitlementRequired: ['Workspace owner or admin'],
         keys: [],
-        allowedProviders: [...BYOK_ALLOWED_PROVIDERS],
+        allowedProviders: [...this.allowedProviders],
         localStorageSupported: false,
         customEndpointSupported: this.customEndpointSupported,
         hasAiPlan: await this.entitlement.hasAiPlan(userId),
@@ -153,7 +162,7 @@ export class ByokService {
         localEntitled: false,
         entitlementRequired: ['Pro', 'Team', 'Believer'],
         keys: [],
-        allowedProviders: [...BYOK_ALLOWED_PROVIDERS],
+        allowedProviders: [...this.allowedProviders],
         localStorageSupported: false,
         customEndpointSupported: this.customEndpointSupported,
         hasAiPlan: await this.entitlement.hasAiPlan(userId),
@@ -173,7 +182,7 @@ export class ByokService {
       localEntitled,
       entitlementRequired: ['Pro', 'Team', 'Believer'],
       keys,
-      allowedProviders: [...BYOK_ALLOWED_PROVIDERS],
+      allowedProviders: [...this.allowedProviders],
       localStorageSupported: false,
       customEndpointSupported: this.customEndpointSupported,
       hasAiPlan: await this.entitlement.hasAiPlan(userId),
@@ -604,6 +613,10 @@ export class ByokService {
       case ByokProvider.gemini:
       case ByokProvider.anthropic:
         return { apiKey, ...(endpoint ? { baseURL: endpoint } : {}) };
+      case ByokProvider.glm:
+        return { apiKey, baseURL: endpoint ?? DEFAULT_GLM_BASE_URL };
+      case ByokProvider.gemma:
+        return { apiKey, baseURL: endpoint ?? DEFAULT_GEMMA_BASE_URL };
       case ByokProvider.fal:
         return { apiKey };
     }
@@ -627,7 +640,7 @@ export class ByokService {
     workspaceId?: string
   ): ByokProfileMeta | null {
     const match =
-      /^byok-([a-f0-9]{12})-(openai|anthropic|gemini|fal)-(.+)$/.exec(
+      /^byok-([a-f0-9]{12})-(openai|anthropic|gemini|fal|glm|gemma)-(.+)$/.exec(
         providerId
       );
     if (!match) return null;
@@ -670,7 +683,10 @@ export class ByokService {
       configured: true,
       enabled: row.enabled,
       endpoint: row.endpoint,
-      endpointEditable: this.customEndpointSupported,
+      endpointEditable:
+        this.customEndpointSupported ||
+        provider === ByokProvider.glm ||
+        provider === ByokProvider.gemma,
       sortOrder: row.sortOrder,
       capabilities: this.capabilities(provider, 'server'),
       testStatus: row.lastValidationError
@@ -704,6 +720,10 @@ export class ByokService {
               'Indexing',
             ]
           : ['Text', 'Image input', 'Actions', 'Image generate'];
+      case ByokProvider.glm:
+        return ['Text', 'Image input', 'Actions'];
+      case ByokProvider.gemma:
+        return ['Text', 'Image input'];
       case ByokProvider.fal:
         return ['Image generate'];
     }
@@ -753,7 +773,7 @@ export class ByokService {
   }
 
   private assertProvider(provider: ByokProvider) {
-    if (!BYOK_ALLOWED_PROVIDERS.includes(provider)) {
+    if (!this.allowedProviders.includes(provider)) {
       throw new BadRequestException('Unsupported BYOK provider.');
     }
   }
@@ -793,7 +813,7 @@ export class ByokService {
       case ByokProvider.openai:
         return {
           method: 'GET',
-          url: `${endpoint ?? 'https://api.openai.com/v1'}/models`,
+          url: `${endpoint ?? DEFAULT_OPENAI_BASE_URL}/models`,
           headers: { Authorization: `Bearer ${apiKey}` },
         };
       case ByokProvider.anthropic:
@@ -810,6 +830,18 @@ export class ByokService {
           method: 'GET',
           url: `${endpoint ?? 'https://generativelanguage.googleapis.com/v1beta'}/models`,
           headers: { 'x-goog-api-key': apiKey },
+        };
+      case ByokProvider.glm:
+        return {
+          method: 'GET',
+          url: `${endpoint ?? DEFAULT_GLM_BASE_URL}/models`,
+          headers: { Authorization: `Bearer ${apiKey}` },
+        };
+      case ByokProvider.gemma:
+        return {
+          method: 'GET',
+          url: `${endpoint ?? DEFAULT_GEMMA_BASE_URL}/models`,
+          headers: { Authorization: `Bearer ${apiKey}` },
         };
       case ByokProvider.fal:
         return {

@@ -25,6 +25,8 @@ export type TextToTextOptions = {
   isRootSession?: boolean;
   reasoning?: boolean;
   modelId?: string;
+  executionLane?: 'server' | 'local';
+  localCapable?: boolean;
   toolsConfig?: AIToolsConfig;
 };
 
@@ -73,6 +75,27 @@ interface CreateMessageOptions {
   signal?: AbortSignal;
 }
 
+type CreateCopilotMessageOptions = {
+  sessionId: string;
+  content?: string;
+  params?: Record<string, string>;
+  attachments?: string[];
+  blobs?: File[];
+};
+
+function toMessageParams(params?: Record<string, unknown>) {
+  if (!params) {
+    return undefined;
+  }
+  const entries = Object.entries(params).flatMap(([key, value]) => {
+    if (value == null) {
+      return [];
+    }
+    return [[key, String(value)] as const];
+  });
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
 async function createMessage({
   client,
   sessionId,
@@ -83,10 +106,10 @@ async function createMessage({
   signal,
 }: CreateMessageOptions): Promise<string> {
   const hasAttachments = attachments && attachments.length > 0;
-  const options: Parameters<CopilotClient['createMessage']>[0] = {
+  const options: CreateCopilotMessageOptions = {
     sessionId,
     content,
-    params: params as Parameters<CopilotClient['createMessage']>[0]['params'],
+    params: toMessageParams(params),
   };
 
   if (hasAttachments) {
@@ -128,6 +151,8 @@ export function textToText({
   runId,
   reasoning,
   modelId,
+  executionLane,
+  localCapable,
   toolsConfig,
 }: TextToTextOptions) {
   let messageId: string | undefined;
@@ -162,6 +187,8 @@ export function textToText({
             messageId,
             reasoning,
             modelId,
+            executionLane,
+            localCapable,
             toolsConfig,
             actionId,
             actionVersion,
@@ -230,6 +257,8 @@ export function textToText({
           messageId,
           reasoning,
           modelId,
+          executionLane,
+          localCapable,
           toolsConfig,
           actionId,
           actionVersion,

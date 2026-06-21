@@ -30,6 +30,7 @@ import {
   CopilotProviderLifecycleService,
   CopilotProviderRegistryService,
   CopilotProviders,
+  LocalInferenceProvider,
 } from './providers';
 import { CopilotResolver, UserCopilotResolver } from './resolver';
 import { ActionRuntimeBridge } from './runtime/action-runtime-bridge';
@@ -45,6 +46,7 @@ import { ImageResultHost } from './runtime/hosts/image-result-host';
 import { ResponsePostprocessor } from './runtime/hosts/response-postprocessor';
 import { ToolExecutorHost } from './runtime/hosts/tool-executor-host';
 import { TurnPersistence } from './runtime/hosts/turn-persistence';
+import { CopilotLaneRouter } from './runtime/lane-router';
 import { ModelSelectionPolicy } from './runtime/model-selection-policy';
 import { NativeExecutionEngine } from './runtime/native-execution-engine';
 import { PromptRuntime } from './runtime/prompt-runtime';
@@ -89,6 +91,8 @@ export const COPILOT_RUNTIME_PROVIDERS = [
   CopilotEmbeddingClientService,
   PromptService,
   ModelSelectionPolicy,
+  CopilotLaneRouter,
+  LocalInferenceProvider,
   ActionRuntimeBridge,
   CopilotExecutionMetrics,
   ExecutionPlanBuilder,

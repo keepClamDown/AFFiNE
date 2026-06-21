@@ -133,6 +133,8 @@ export class ActionStreamHost {
               workspace: prepared.session.config.workspaceId,
               session: sessionId,
               byokLeaseId: parsedQuery.byokLeaseId,
+              executionLane: parsedQuery.executionLane,
+              localCapable: parsedQuery.localCapable,
               quotaBackedRoutesAllowed: prepared.quotaBackedRoutesAllowed,
               featureKind: 'action',
             },

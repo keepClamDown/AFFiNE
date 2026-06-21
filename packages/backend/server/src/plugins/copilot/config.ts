@@ -5,6 +5,7 @@ import {
   StorageJSONSchema,
   StorageProviderConfig,
 } from '../../base';
+import { ByokProvider } from './byok/types';
 import {
   AnthropicOfficialConfig,
   AnthropicVertexConfig,
@@ -186,9 +187,7 @@ declare global {
       enabled: boolean;
       byok: {
         enabled: ConfigItem<boolean>;
-        allowedProviders: ConfigItem<
-          Array<'openai' | 'anthropic' | 'gemini' | 'fal'>
-        >;
+        allowedProviders: ConfigItem<ByokProvider[]>;
         allowCustomEndpoint: ConfigItem<boolean>;
       };
       unsplash: ConfigItem<{
@@ -225,8 +224,8 @@ defineModuleConfig('copilot', {
   },
   'byok.allowedProviders': {
     desc: 'The allowlist for workspace BYOK providers.',
-    default: ['openai', 'anthropic', 'gemini', 'fal'],
-    shape: z.array(z.enum(['openai', 'anthropic', 'gemini', 'fal'])),
+    default: Object.values(ByokProvider),
+    shape: z.array(z.nativeEnum(ByokProvider)),
   },
   'byok.allowCustomEndpoint': {
     desc: 'Whether workspace BYOK custom endpoints are accepted.',

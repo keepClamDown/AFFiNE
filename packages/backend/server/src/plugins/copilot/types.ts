@@ -38,6 +38,14 @@ export const ChatQuerySchema = z
     messageId: zMaybeString,
     modelId: zMaybeString,
     byokLeaseId: zMaybeString,
+    executionLane: z.preprocess(
+      val => {
+        const lane = takeFirst(val);
+        return lane === '' || lane == null ? undefined : lane;
+      },
+      z.enum(['server', 'local']).optional()
+    ),
+    localCapable: zBool,
     retry: zBool,
     reasoning: zBool,
     webSearch: zBool,
@@ -49,6 +57,8 @@ export const ChatQuerySchema = z
       messageId,
       modelId,
       byokLeaseId,
+      executionLane,
+      localCapable,
       retry,
       reasoning,
       webSearch,
@@ -58,6 +68,8 @@ export const ChatQuerySchema = z
       messageId,
       modelId,
       byokLeaseId,
+      executionLane,
+      localCapable,
       retry,
       reasoning,
       webSearch,

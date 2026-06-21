@@ -37,6 +37,8 @@ const ByokProvider = vi.hoisted(() => ({
   anthropic: 'anthropic',
   gemini: 'gemini',
   fal: 'fal',
+  glm: 'glm',
+  gemma: 'gemma',
 }));
 const ByokKeyStorage = vi.hoisted(() => ({
   server: 'server',
@@ -245,7 +247,7 @@ function settings(overrides: Record<string, unknown> = {}) {
     serverEntitled: true,
     localEntitled: false,
     entitlementRequired: ['Pro', 'Team', 'Believer'],
-    allowedProviders: ['openai', 'anthropic', 'gemini', 'fal'],
+    allowedProviders: ['openai', 'anthropic', 'gemini', 'fal', 'glm', 'gemma'],
     localStorageSupported: false,
     customEndpointSupported: false,
     hasAiPlan: true,

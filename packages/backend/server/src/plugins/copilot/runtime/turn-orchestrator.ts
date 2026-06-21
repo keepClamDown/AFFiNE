@@ -62,8 +62,15 @@ export class TurnOrchestrator {
       sessionId,
       query
     );
-    const { modelId, reasoning, webSearch, toolsConfig, byokLeaseId } =
-      ChatQuerySchema.parse(query);
+    const {
+      modelId,
+      reasoning,
+      webSearch,
+      toolsConfig,
+      byokLeaseId,
+      executionLane,
+      localCapable,
+    } = ChatQuerySchema.parse(query);
     const promptParams = await this.buildPromptParams(sessionId, {
       latestTurn: prepared.latestTurn,
       includeContextFiles: selection.includeContextFiles,
@@ -83,6 +90,8 @@ export class TurnOrchestrator {
         webSearch,
         toolsConfig,
         byokLeaseId,
+        executionLane,
+        localCapable,
         billingUnitId: prepared.latestTurn?.id,
         quotaBackedRoutesAllowed: prepared.quotaBackedRoutesAllowed,
         featureKind:

@@ -268,6 +268,8 @@ const CopilotProviderOptionsSchema = z.object({
   billingUnitId: z.string().optional(),
   taskId: z.string().optional(),
   actionId: z.string().optional(),
+  executionLane: z.enum(['server', 'local']).optional(),
+  localCapable: z.boolean().optional(),
   quotaBackedRoutesAllowed: z.boolean().optional(),
   featureKind: z
     .enum([

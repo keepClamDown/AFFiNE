@@ -376,6 +376,8 @@ export enum ByokProvider {
   anthropic = 'anthropic',
   fal = 'fal',
   gemini = 'gemini',
+  gemma = 'gemma',
+  glm = 'glm',
   openai = 'openai',
 }
 

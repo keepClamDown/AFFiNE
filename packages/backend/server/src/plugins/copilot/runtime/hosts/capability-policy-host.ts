@@ -3,9 +3,11 @@ import { ModuleRef } from '@nestjs/core';
 
 import { ServerFeature, ServerService } from '../../../../core';
 import { QuotaStateService } from '../../../../core/quota/state';
+import { LocalInferenceProvider } from '../../providers/local-inference';
 import type { ChatSession } from '../../session';
 import { type ToolsConfig } from '../../types';
 import { getTools } from '../../utils';
+import { CopilotLaneRouter } from '../lane-router';
 import {
   ModelSelectionPolicy,
   type ResolveModelInput,
@@ -19,6 +21,8 @@ export type ChatSelectionOptions = {
   toolsConfig?: ToolsConfig;
   byokLeaseId?: string;
   billingUnitId?: string;
+  executionLane?: 'server' | 'local';
+  localCapable?: boolean;
   featureKind?: 'chat' | 'action' | 'image';
   quotaBackedRoutesAllowed?: boolean;
 };
@@ -34,7 +38,9 @@ export class CapabilityPolicyHost {
   constructor(
     private readonly server: ServerService,
     private readonly moduleRef: ModuleRef,
-    private readonly modelSelection: ModelSelectionPolicy
+    private readonly modelSelection: ModelSelectionPolicy,
+    private readonly laneRouter: CopilotLaneRouter,
+    private readonly localInferenceProvider: LocalInferenceProvider
   ) {}
 
   private async hasAiProAccess(
@@ -92,6 +98,16 @@ export class CapabilityPolicyHost {
       session.config.promptConfig?.tools,
       options.toolsConfig
     );
+    const laneResolution = this.laneRouter.resolve({
+      requestedExecutionLane: options.executionLane,
+      localCapable: options.localCapable,
+    });
+    const localResolution = this.localInferenceProvider.resolve({
+      requestedExecutionLane: laneResolution.localRequested
+        ? 'local'
+        : undefined,
+      localCapable: laneResolution.localCapable,
+    });
     return {
       model,
       providerOptions: {
@@ -101,6 +117,8 @@ export class CapabilityPolicyHost {
         workspace: session.config.workspaceId,
         byokLeaseId: options.byokLeaseId,
         billingUnitId: options.billingUnitId,
+        executionLane: localResolution.resolvedExecutionLane,
+        localCapable: localResolution.localCapable,
         featureKind: options.featureKind ?? 'chat',
         quotaBackedRoutesAllowed: options.quotaBackedRoutesAllowed,
         reasoning: options.reasoning,

@@ -7,6 +7,8 @@ export enum ByokProvider {
   anthropic = 'anthropic',
   gemini = 'gemini',
   fal = 'fal',
+  glm = 'glm',
+  gemma = 'gemma',
 }
 
 export enum ByokKeyStorage {
@@ -35,16 +37,20 @@ export type ByokFeatureKind =
   | 'transcript'
   | 'workspace_indexing';
 
-export const BYOK_ALLOWED_PROVIDERS = [
+export const BYOK_SUPPORTED_PROVIDERS = [
   ByokProvider.openai,
   ByokProvider.anthropic,
   ByokProvider.gemini,
   ByokProvider.fal,
+  ByokProvider.glm,
+  ByokProvider.gemma,
 ] as const;
 
 export function byokProviderToCopilotType(provider: ByokProvider) {
   switch (provider) {
     case ByokProvider.openai:
+    case ByokProvider.glm:
+    case ByokProvider.gemma:
       return CopilotProviderType.OpenAI;
     case ByokProvider.anthropic:
       return CopilotProviderType.Anthropic;
@@ -71,7 +77,7 @@ export function copilotTypeToByokProvider(type: CopilotProviderType) {
 }
 
 export function isByokProvider(value: string): value is ByokProvider {
-  return (BYOK_ALLOWED_PROVIDERS as readonly string[]).includes(value);
+  return (BYOK_SUPPORTED_PROVIDERS as readonly string[]).includes(value);
 }
 
 registerEnumType(ByokProvider, { name: 'ByokProvider' });
