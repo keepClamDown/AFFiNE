@@ -176,6 +176,14 @@ export function privacyStateTitle(privacyState: AIPrivacyState): string {
   }
 }
 
+export function appleLocalInferenceStateTitle(
+  state: AppleLocalInferenceState
+): string {
+  return state === 'deferred_candidate'
+    ? 'Bundled local candidate'
+    : 'Not applicable';
+}
+
 export function capabilitiesFor(
   provider: ByokProvider,
   storage: ByokKeyStorage
@@ -337,4 +345,37 @@ export function buildAIModelCatalogSnapshot(input: {
     providers,
     warnings,
   };
+}
+
+export const DESKTOP_OFFLINE_GEMMA_MODEL_ID = 'gemma-3-4b-it';
+
+export function buildDesktopOfflineGemmaModels(): AIModelCatalogItem[] {
+  return [
+    toAIModelCatalogItem(
+      {
+        id: DESKTOP_OFFLINE_GEMMA_MODEL_ID,
+        name: 'Gemma 3 4B Instruct',
+      },
+      { defaultModelId: DESKTOP_OFFLINE_GEMMA_MODEL_ID }
+    ),
+  ];
+}
+
+export function mergeDesktopLocalGemmaModels(
+  models: AIModelCatalogItem[]
+): AIModelCatalogItem[] {
+  const hasCloudModels = models.length > 0;
+  const desktopModels = buildDesktopOfflineGemmaModels().map(model => ({
+    ...model,
+    isDefault: !hasCloudModels && model.isDefault,
+  }));
+  const merged = [...desktopModels];
+
+  for (const model of models) {
+    if (!merged.some(existing => existing.id === model.id)) {
+      merged.push(model);
+    }
+  }
+
+  return merged;
 }

@@ -4,12 +4,13 @@ import { partition } from 'lodash-es';
 import { toTextStream } from '../../provider/event-source';
 import { createWorkspaceByokLocalLease } from './byok-local-lease';
 import { type CopilotClient, Endpoint } from './copilot-client';
+import { streamDesktopLocalChat } from './local-runtime-client';
 
 const TIMEOUT = 50000;
 
 export type TextToTextOptions = {
   client: CopilotClient;
-  sessionId: string;
+  sessionId?: string;
   workspaceId?: string;
   content?: string;
   attachments?: (string | Blob | File)[];
@@ -21,6 +22,7 @@ export type TextToTextOptions = {
   endpoint?: Endpoint;
   actionId?: string;
   actionVersion?: string;
+  promptName?: string;
   runId?: string;
   isRootSession?: boolean;
   reasoning?: boolean;
@@ -28,6 +30,10 @@ export type TextToTextOptions = {
   executionLane?: 'server' | 'local';
   localCapable?: boolean;
   toolsConfig?: AIToolsConfig;
+  historyMessages?: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+  }>;
 };
 
 export type ToImageOptions = TextToTextOptions & {
@@ -134,27 +140,51 @@ async function createMessage({
   return await client.createMessage(options, { timeout, signal });
 }
 
-export function textToText({
-  client,
-  sessionId,
-  workspaceId,
-  content,
-  attachments,
-  params,
-  stream,
-  signal,
-  timeout = TIMEOUT,
-  retry = false,
-  endpoint = Endpoint.StreamObject,
-  actionId,
-  actionVersion,
-  runId,
-  reasoning,
-  modelId,
-  executionLane,
-  localCapable,
-  toolsConfig,
-}: TextToTextOptions) {
+export function textToText(options: TextToTextOptions) {
+  const {
+    client,
+    sessionId,
+    workspaceId,
+    content,
+    attachments,
+    params,
+    stream,
+    signal,
+    timeout = TIMEOUT,
+    retry = false,
+    endpoint = Endpoint.StreamObject,
+    actionId,
+    actionVersion,
+    runId,
+    reasoning,
+    modelId,
+    executionLane,
+    localCapable,
+    toolsConfig,
+  } = options;
+
+  if (executionLane === 'local') {
+    if (stream) {
+      return {
+        [Symbol.asyncIterator]: async function* () {
+          yield* await streamDesktopLocalChat(options);
+        },
+      };
+    }
+
+    return (async function () {
+      const chunks: string[] = [];
+      for await (const chunk of await streamDesktopLocalChat(options)) {
+        chunks.push(chunk);
+      }
+      return chunks.join('');
+    })();
+  }
+
+  if (!sessionId) {
+    throw new Error('sessionId is required for server AI transport');
+  }
+
   let messageId: string | undefined;
 
   if (stream) {
@@ -319,6 +349,10 @@ export function toImage({
   runId,
   client,
 }: ToImageOptions) {
+  if (!sessionId) {
+    throw new Error('sessionId is required for image transport');
+  }
+
   let messageId: string | undefined;
   return {
     [Symbol.asyncIterator]: async function* () {
