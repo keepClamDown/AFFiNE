@@ -46,7 +46,7 @@ export enum Endpoint {
   Images = 'images',
 }
 
-type OptionsField<T extends GraphQLQuery> =
+export type OptionsField<T extends GraphQLQuery> =
   RequestOptions<T>['variables'] extends { options: infer U } ? U : never;
 
 function toUserFriendlyError(err: any): UserFriendlyError {
@@ -468,6 +468,8 @@ export class CopilotClient {
       messageId,
       reasoning,
       modelId,
+      executionLane,
+      localCapable,
       toolsConfig,
       actionId,
       actionVersion,
@@ -479,6 +481,8 @@ export class CopilotClient {
       messageId?: string;
       reasoning?: boolean;
       modelId?: string;
+      executionLane?: 'server' | 'local';
+      localCapable?: boolean;
       toolsConfig?: AIToolsConfig;
       actionId?: string;
       actionVersion?: string;
@@ -496,6 +500,8 @@ export class CopilotClient {
       messageId,
       reasoning,
       modelId,
+      executionLane,
+      localCapable,
       toolsConfig,
       actionId,
       actionVersion,

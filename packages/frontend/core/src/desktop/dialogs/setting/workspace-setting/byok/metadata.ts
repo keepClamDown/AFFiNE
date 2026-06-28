@@ -1,6 +1,10 @@
 import { ByokKeyStorage, ByokProvider } from '@affine/graphql';
 import type { I18nInstance } from '@affine/i18n';
 
+import {
+  capabilitiesFor as sharedCapabilitiesFor,
+  providerLabels,
+} from '../../../../../modules/ai-button/services/catalog';
 import type { ByokKey, ByokStorage } from './types';
 
 export function byokT(
@@ -11,12 +15,7 @@ export function byokT(
   return t.t('com.affine.settings.workspace.byok.' + key, options);
 }
 
-export const providerLabels: Record<ByokProvider, string> = {
-  [ByokProvider.openai]: 'OpenAI',
-  [ByokProvider.anthropic]: 'Anthropic',
-  [ByokProvider.gemini]: 'Gemini',
-  [ByokProvider.fal]: 'FAL',
-};
+export { providerLabels };
 
 export function storageLabel(t: I18nInstance, storage: ByokStorage) {
   return storage === ByokKeyStorage.local
@@ -25,25 +24,7 @@ export function storageLabel(t: I18nInstance, storage: ByokStorage) {
 }
 
 export function capabilitiesFor(provider: ByokProvider, storage: ByokStorage) {
-  switch (provider) {
-    case ByokProvider.openai:
-      return ['Text', 'Image input', 'Actions', 'Image generate'];
-    case ByokProvider.anthropic:
-      return ['Text', 'Image input'];
-    case ByokProvider.gemini:
-      return storage === ByokKeyStorage.server
-        ? [
-            'Text',
-            'Image input',
-            'Actions',
-            'Image generate',
-            'Transcript',
-            'Indexing',
-          ]
-        : ['Text', 'Image input', 'Actions', 'Image generate'];
-    case ByokProvider.fal:
-      return ['Image generate'];
-  }
+  return sharedCapabilitiesFor(provider, storage);
 }
 
 export function capabilityLabel(t: I18nInstance, capability: string) {
@@ -75,6 +56,8 @@ export const capabilityRows = [
       ByokProvider.openai,
       ByokProvider.anthropic,
       ByokProvider.gemini,
+      ByokProvider.glm,
+      ByokProvider.gemma,
     ],
     coverageCapabilities: ['Text'],
   },
@@ -83,7 +66,7 @@ export const capabilityRows = [
     featureKind: 'action',
     fallbackKey: 'feature.action.fallback',
     icon: 'action',
-    providers: [ByokProvider.openai, ByokProvider.gemini],
+    providers: [ByokProvider.openai, ByokProvider.gemini, ByokProvider.glm],
     coverageCapabilities: ['Actions'],
   },
   {

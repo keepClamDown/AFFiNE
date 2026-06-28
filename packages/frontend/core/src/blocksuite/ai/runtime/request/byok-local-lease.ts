@@ -25,6 +25,10 @@ function toGraphqlByokProvider(provider: string): ByokProvider | null {
       return ByokProvider.gemini;
     case ByokProvider.fal:
       return ByokProvider.fal;
+    case ByokProvider.glm:
+      return ByokProvider.glm;
+    case ByokProvider.gemma:
+      return ByokProvider.gemma;
     default:
       return null;
   }
@@ -59,22 +63,32 @@ export async function createWorkspaceByokLocalLease(
     if (!(await storage.isSupported())) return undefined;
     const providers = await storage.getWorkspaceLeaseProviders(workspaceId);
     if (!providers.length) return undefined;
-    const leaseProviders = providers.flatMap(provider => {
-      const gqlProvider = toGraphqlByokProvider(provider.provider);
-      return gqlProvider
-        ? [
-            {
-              provider: gqlProvider,
-              name: provider.name,
-              description: provider.description ?? null,
-              apiKey: provider.apiKey,
-              endpoint: provider.endpoint ?? null,
-              sortOrder: provider.sortOrder ?? 0,
-              enabled: provider.enabled ?? true,
-            },
-          ]
-        : [];
-    });
+    const leaseProviders = providers.flatMap(
+      (provider: {
+        provider: string;
+        name: string;
+        description?: string | null;
+        apiKey: string;
+        endpoint?: string | null;
+        sortOrder?: number | null;
+        enabled?: boolean | null;
+      }) => {
+        const gqlProvider = toGraphqlByokProvider(provider.provider);
+        return gqlProvider
+          ? [
+              {
+                provider: gqlProvider,
+                name: provider.name,
+                description: provider.description ?? null,
+                apiKey: provider.apiKey,
+                endpoint: provider.endpoint ?? null,
+                sortOrder: provider.sortOrder ?? 0,
+                enabled: provider.enabled ?? true,
+              },
+            ]
+          : [];
+      }
+    );
     if (!leaseProviders.length) return undefined;
 
     const result = await client.gql({

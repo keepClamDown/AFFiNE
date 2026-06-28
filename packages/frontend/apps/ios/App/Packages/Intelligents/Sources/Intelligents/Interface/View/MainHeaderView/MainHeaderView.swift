@@ -21,19 +21,13 @@ class MainHeaderView: UIView {
     $0.textAlignment = .center
   }
 
-  private lazy var modelMenu = UIDeferredMenuElement.uncached { completion in
-    completion([])
-  }
-
   private lazy var dropdownButton = UIButton(type: .system).then {
     $0.imageView?.contentMode = .scaleAspectFit
-    $0.setImage(UIImage.affineArrowDown, for: .normal)
     $0.tintColor = UIColor.affineIconPrimary
+    $0.backgroundColor = UIColor.affineLayerBackgroundSecondary
+    $0.layer.cornerRadius = 8
     $0.addTarget(self, action: #selector(dropdownButtonTapped), for: .touchUpInside)
-    $0.showsMenuAsPrimaryAction = true
-    $0.menu = UIMenu(options: [.displayInline], children: [
-      modelMenu,
-    ])
+    $0.showsMenuAsPrimaryAction = false
     $0.isHidden = true
   }
 
@@ -98,7 +92,7 @@ class MainHeaderView: UIView {
     }
 
     dropdownButton.snp.makeConstraints { make in
-      make.size.equalTo(titleLabel.font.pointSize + 16)
+      make.height.equalTo(titleLabel.font.pointSize + 16)
     }
 
     // ensure center stack to be center
@@ -118,6 +112,37 @@ class MainHeaderView: UIView {
 
   @objc private func closeButtonTapped() {
     delegate?.mainHeaderViewDidTapClose()
+  }
+
+  func updateModelBadge(
+    title: String?,
+    menu: UIMenu?
+  ) {
+    guard let title, !title.isEmpty else {
+      dropdownButton.isHidden = true
+      dropdownButton.menu = nil
+      dropdownButton.configuration = nil
+      return
+    }
+
+    var configuration = UIButton.Configuration.plain()
+    configuration.title = title
+    configuration.baseForegroundColor = UIColor.affineTextPrimary
+    configuration.contentInsets = NSDirectionalEdgeInsets(
+      top: 0,
+      leading: 10,
+      bottom: 0,
+      trailing: 10
+    )
+    configuration.image = menu == nil ? nil : UIImage.affineArrowDown
+    configuration.imagePlacement = .trailing
+    configuration.imagePadding = 4
+
+    dropdownButton.configuration = configuration
+    dropdownButton.menu = menu
+    dropdownButton.showsMenuAsPrimaryAction = menu != nil
+    dropdownButton.isUserInteractionEnabled = menu != nil
+    dropdownButton.isHidden = false
   }
 
   @objc private func dropdownButtonTapped() {

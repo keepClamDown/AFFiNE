@@ -4,7 +4,7 @@ import { PrismaClient, WorkspaceMemberStatus } from '@prisma/client';
 import ava, { type ExecutionContext, type TestFn } from 'ava';
 import Sinon from 'sinon';
 
-import { Cache, CryptoHelper } from '../../base';
+import { Cache, ConfigFactory, CryptoHelper } from '../../base';
 import { EntitlementService } from '../../core/entitlement';
 import { Models, WorkspaceRole } from '../../models';
 import { CopilotAccessPolicy } from '../../plugins/copilot/access';
@@ -31,6 +31,9 @@ interface Context {
   crypto: CryptoHelper;
   cache: Cache;
   entitlement: EntitlementService;
+  configFactory: ConfigFactory;
+  defaultByokProviders: ByokProvider[];
+  defaultAllowCustomEndpoint: boolean;
 }
 
 const test = ava.serial as TestFn<Context>;
@@ -51,10 +54,25 @@ test.before(async t => {
   t.context.crypto = module.get(CryptoHelper);
   t.context.cache = module.get(Cache);
   t.context.entitlement = module.get(EntitlementService);
+  t.context.configFactory = module.get(ConfigFactory);
+  const defaultConfig = t.context.configFactory.clone();
+  t.context.defaultByokProviders = [
+    ...defaultConfig.copilot.byok.allowedProviders,
+  ];
+  t.context.defaultAllowCustomEndpoint =
+    defaultConfig.copilot.byok.allowCustomEndpoint;
 });
 
 test.beforeEach(async t => {
   await t.context.module.initTestingDB();
+  t.context.configFactory.override({
+    copilot: {
+      byok: {
+        allowedProviders: t.context.defaultByokProviders,
+        allowCustomEndpoint: t.context.defaultAllowCustomEndpoint,
+      },
+    },
+  });
 });
 
 test.after.always(async t => {
@@ -919,6 +937,127 @@ test('Gemini key test sends key in header and returns safe failure message', asy
   t.deepEqual(fetch.firstCall.args[2]?.allowedHeaders, ['x-goog-api-key']);
   t.false(result.message?.includes('gemini-secret'));
   t.is(result.message, 'Provider rejected the BYOK key.');
+});
+
+test('settings and provider checks respect the configured BYOK allowlist', async t => {
+  const { user, workspace } = await createUserWorkspace(t);
+  await grantUserPlan(t, user.id);
+  t.context.configFactory.override({
+    copilot: {
+      byok: {
+        allowedProviders: [ByokProvider.openai, ByokProvider.glm],
+      },
+    },
+  });
+
+  const settings = await t.context.byok.getSettings(workspace.id, user.id);
+  t.deepEqual(settings.allowedProviders, [
+    ByokProvider.openai,
+    ByokProvider.glm,
+  ]);
+
+  await t.throwsAsync(
+    t.context.byok.upsertConfig({
+      workspaceId: workspace.id,
+      userId: user.id,
+      provider: ByokProvider.gemma,
+      storage: ByokKeyStorage.server,
+      name: 'Gemma',
+      apiKey: 'gemma-secret',
+    }),
+    { message: 'Unsupported BYOK provider.' }
+  );
+});
+
+test('custom endpoint support follows config override', async t => {
+  t.false(t.context.byok.customEndpointSupported);
+
+  t.context.configFactory.override({
+    copilot: {
+      byok: {
+        allowCustomEndpoint: true,
+      },
+    },
+  });
+
+  t.true(t.context.byok.customEndpointSupported);
+});
+
+test('GLM key test uses OpenAI-compatible probe defaults', async t => {
+  const { user, workspace } = await createUserWorkspace(t);
+  await grantUserPlan(t, user.id);
+
+  const fetch = Sinon.stub(t.context.byok as any, 'probeFetch').resolves(
+    new Response('{}', { status: 200 })
+  );
+  t.teardown(() => fetch.restore());
+
+  const result = await t.context.byok.testConfig({
+    workspaceId: workspace.id,
+    userId: user.id,
+    provider: ByokProvider.glm,
+    storage: ByokKeyStorage.server,
+    apiKey: 'glm-secret',
+  });
+
+  t.true(result.ok);
+  t.is(fetch.firstCall.args[0], 'https://open.bigmodel.cn/api/paas/v4/models');
+  t.is(
+    (fetch.firstCall.args[1]!.headers as Record<string, string>).Authorization,
+    'Bearer glm-secret'
+  );
+  t.deepEqual(fetch.firstCall.args[2]?.allowedHeaders, ['Authorization']);
+});
+
+test('Gemma key test uses OpenAI-compatible probe defaults', async t => {
+  const { user, workspace } = await createUserWorkspace(t);
+  await grantUserPlan(t, user.id);
+
+  const fetch = Sinon.stub(t.context.byok as any, 'probeFetch').resolves(
+    new Response('{}', { status: 200 })
+  );
+  t.teardown(() => fetch.restore());
+
+  const result = await t.context.byok.testConfig({
+    workspaceId: workspace.id,
+    userId: user.id,
+    provider: ByokProvider.gemma,
+    storage: ByokKeyStorage.server,
+    apiKey: 'gemma-secret',
+  });
+
+  t.true(result.ok);
+  t.is(
+    fetch.firstCall.args[0],
+    'https://generativelanguage.googleapis.com/v1beta/openai/models'
+  );
+  t.is(
+    (fetch.firstCall.args[1]!.headers as Record<string, string>).Authorization,
+    'Bearer gemma-secret'
+  );
+  t.deepEqual(fetch.firstCall.args[2]?.allowedHeaders, ['Authorization']);
+});
+
+test('BYOK profile metadata parsing supports GLM and Gemma ids', t => {
+  const workspaceId = randomUUID();
+  const hash = workspaceHash(workspaceId);
+
+  const glmMeta = (t.context.byok as any).parseProfileMeta(
+    `byok-${hash}-glm-provider-key`,
+    workspaceId
+  );
+  const gemmaMeta = (t.context.byok as any).parseProfileMeta(
+    `byok-${hash}-gemma-local-0`,
+    workspaceId
+  );
+
+  t.like(glmMeta, {
+    provider: ByokProvider.glm,
+    keyId: 'provider-key',
+  });
+  t.like(gemmaMeta, {
+    provider: ByokProvider.gemma,
+  });
 });
 
 test('FAL key test uses read-only platform API probe endpoint', async t => {

@@ -41,6 +41,8 @@ class MainViewController: UIViewController {
     view.backgroundColor = .affineLayerBackgroundPrimary
 
     setupUI()
+    bindContext()
+    refreshHeaderModelBadge()
 
     view.isUserInteractionEnabled = true
     terminateEditGesture = UITapGestureRecognizer(target: self, action: #selector(terminateEditing))
@@ -87,6 +89,7 @@ class MainViewController: UIViewController {
     super.viewWillAppear(animated)
     navigationController!.setNavigationBarHidden(true, animated: animated)
     documentPickerView.updateDocumentsFromRecentDocs()
+    refreshHeaderModelBadge()
     DispatchQueue.main.async {
       self.inputBox.textView.becomeFirstResponder()
     }
@@ -105,6 +108,15 @@ class MainViewController: UIViewController {
     if listView.listView.bottomInset != bottomInset {
       listView.listView.bottomInset = bottomInset
     }
+  }
+
+  private func bindContext() {
+    intelligentContext.$currentSession
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] _ in
+        self?.refreshHeaderModelBadge()
+      }
+      .store(in: &cancellables)
   }
 
   @objc func terminateEditing() {

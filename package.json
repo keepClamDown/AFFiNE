@@ -33,7 +33,7 @@
     "test": "vitest --run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc -b tsconfig.json --verbose",
+    "typecheck": "yarn workspace @affine/server prisma generate && tsc -b tsconfig.json --verbose",
     "postinstall": "yarn affine init && yarn husky"
   },
   "lint-staged": {

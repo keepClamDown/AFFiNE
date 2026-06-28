@@ -316,6 +316,8 @@ enum ByokProvider {
   anthropic
   fal
   gemini
+  gemma
+  glm
   openai
 }
 

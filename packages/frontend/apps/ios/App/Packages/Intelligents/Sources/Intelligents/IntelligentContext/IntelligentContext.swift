@@ -28,6 +28,7 @@ public class IntelligentContext {
     case subscriptionPlanKey
     case storageQuotaKey
     case storageUsedKey
+    case modelCatalogKey
   }
 
   var isAccountValid: Bool {
@@ -69,6 +70,15 @@ public class IntelligentContext {
   }
 
   private init() {}
+
+  public func updateCurrentSessionModel(_ modelId: String?) {
+    guard var currentSession else {
+      return
+    }
+
+    currentSession.model = modelId
+    self.currentSession = currentSession
+  }
 
   public func preparePresent(_ completion: @escaping (Result<Void, Error>) -> Void) {
     assert(webView != nil)
@@ -113,7 +123,7 @@ public class IntelligentContext {
       let gqlGroup = DispatchGroup()
       var gqlMetadataResult: [QLMetadataKey: Any] = [:]
       gqlGroup.enter()
-      prepareMetadataFromGraphQlClient { metadata in
+      prepareMetadataFromGraphQlClient(workspaceId: workspaceId) { metadata in
         gqlMetadataResult = metadata
         gqlGroup.leave()
       }

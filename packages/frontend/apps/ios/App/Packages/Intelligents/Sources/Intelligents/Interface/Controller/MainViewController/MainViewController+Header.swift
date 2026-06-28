@@ -13,10 +13,23 @@ extension MainViewController: MainHeaderViewDelegate {
   }
 
   func mainHeaderViewDidTapDropdown() {
-    print(#function)
+    refreshHeaderModelBadge()
   }
 
   func mainHeaderViewDidTapMenu() {
     print(#function)
+  }
+
+  func refreshHeaderModelBadge() {
+    guard let catalog = intelligentContext.currentModelCatalog else {
+      headerView.updateModelBadge(title: nil, menu: nil)
+      return
+    }
+
+    let selectedModelId = intelligentContext.currentSession?.model
+    headerView.updateModelBadge(
+      title: catalog.badgeTitle(for: selectedModelId),
+      menu: nil
+    )
   }
 }

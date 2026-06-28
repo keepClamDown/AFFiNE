@@ -241,10 +241,26 @@ private extension ChatManager {
       .appendingPathComponent(sessionId)
       .appendingPathComponent("stream")
     var comps = URLComponents(url: streamUrl, resolvingAgainstBaseURL: false)
-    comps?.queryItems = [
-      .init(name: "messageId", value: messageId),
-      .init(name: "retry", value: "false"), // TODO: IMPL FROM UI
+    let selectedModel = IntelligentContext.shared.currentModelCatalog?.model(
+      for: IntelligentContext.shared.currentSession?.model
+    )
+    var queryItems = [
+      URLQueryItem(name: "messageId", value: messageId),
+      URLQueryItem(name: "retry", value: "false"), // TODO: IMPL FROM UI
     ]
+    if let modelId = selectedModel?.id, !modelId.isEmpty {
+      queryItems.append(URLQueryItem(name: "modelId", value: modelId))
+    }
+    queryItems.append(
+      URLQueryItem(
+        name: "executionLane",
+        value: selectedModel?.executionLane ?? "server"
+      )
+    )
+    if selectedModel?.localCapable == true {
+      queryItems.append(URLQueryItem(name: "localCapable", value: "true"))
+    }
+    comps?.queryItems = queryItems
     guard let finalUrl = comps?.url else {
       report(sessionId, ChatError.invalidStreamURL)
       return

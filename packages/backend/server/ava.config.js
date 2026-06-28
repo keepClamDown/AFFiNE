@@ -1,5 +1,9 @@
 const newE2E = process.env.TEST_MODE === 'e2e';
 const newE2ETests = './src/__tests__/e2e/**/*.spec.ts';
+const serverRuntimeLoader = new URL(
+  '../../../tools/cli/register.js',
+  import.meta.url
+).toString();
 
 const preludes = ['./src/prelude.ts'];
 
@@ -15,6 +19,7 @@ export default {
   watchMode: {
     ignoreChanges: ['**/*.gen.*'],
   },
+  nodeArguments: [`--import=${serverRuntimeLoader}`],
   files: newE2E
     ? [newE2ETests]
     : ['**/*.spec.ts', '**/*.e2e.ts', '!' + newE2ETests],
