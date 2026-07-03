@@ -55,6 +55,7 @@ class AFFiNEViewController: CAPBridgeViewController, UIScrollViewDelegate {
       AuthPlugin(),
       CookiePlugin(),
       HashcashPlugin(),
+      LocalAIPlugin(),
       NavigationGesturePlugin(),
       NbStorePlugin(),
       PayWallPlugin(associatedController: self),
