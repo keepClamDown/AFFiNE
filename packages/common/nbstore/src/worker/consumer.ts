@@ -8,6 +8,7 @@ import type { AwarenessRecord } from '../storage/awareness';
 import { Sync } from '../sync';
 import type { PeerStorageOptions } from '../sync/types';
 import { TelemetryManager } from '../telemetry/manager';
+import { fromPromise } from '../utils/from-promise';
 import { MANUALLY_STOP } from '../utils/throw-if-aborted';
 import type { StoreInitOptions, WorkerManagerOps, WorkerOps } from './ops';
 
@@ -262,19 +263,9 @@ class StoreConsumer {
       'blobSync.uploadBlob': ({ blob, force }) =>
         this.blobSync.uploadBlob(blob, force),
       'blobSync.fullDownload': peerId =>
-        new Observable(subscriber => {
-          const abortController = new AbortController();
-          this.blobSync
-            .fullDownload(peerId ?? undefined, abortController.signal)
-            .then(() => {
-              subscriber.next();
-              subscriber.complete();
-            })
-            .catch(error => {
-              subscriber.error(error);
-            });
-          return () => abortController.abort(MANUALLY_STOP);
-        }),
+        fromPromise(signal =>
+          this.blobSync.fullDownload(peerId ?? undefined, signal)
+        ),
       'awarenessSync.update': ({ awareness, origin }) =>
         this.awarenessSync.update(awareness, origin),
       'awarenessSync.subscribeUpdate': docId =>
@@ -373,6 +364,9 @@ export class StoreManagerConsumer {
           storeRef.refCount--;
           if (storeRef.refCount === 0) {
             storeRef.store.destroy().catch(error => {
+              if (error === MANUALLY_STOP) {
+                return;
+              }
               console.error(error);
             });
             this.storePool.delete(key);

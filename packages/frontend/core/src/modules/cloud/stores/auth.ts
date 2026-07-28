@@ -1,5 +1,6 @@
 import {
   deleteAccountMutation,
+  getCurrentUserQuery,
   removeAvatarMutation,
   ServerDeploymentType,
   updateUserProfileMutation,
@@ -101,15 +102,44 @@ export class AuthStore extends Store {
     const session = await this.fetchAuthSession();
     if (!session.user) return { user: null };
 
-    const { user } = await this.nbstoreService.realtime.request(
-      'user.profile.get',
-      {}
-    );
+    const [user, authMethods] = await Promise.all([
+      this.fetchCurrentUserProfile(),
+      this.fetchAuthMethods(),
+    ]);
     if (!user || user.id !== session.user.id) {
-      throw new Error('Realtime user profile does not match auth session');
+      throw new Error('User profile does not match auth session');
     }
-    const authMethods = await this.fetchAuthMethods();
-    return { user: { ...user, authMethods } };
+
+    return {
+      user: {
+        ...user,
+        hasPassword: authMethods?.password?.bound ?? user.hasPassword ?? null,
+        authMethods,
+      },
+    };
+  }
+
+  private async fetchCurrentUserProfile(): Promise<CurrentUserProfileSnapshot | null> {
+    try {
+      const { currentUser } = await this.gqlService.gql({
+        query: getCurrentUserQuery,
+      });
+      return currentUser;
+    } catch (error) {
+      console.warn('Failed to fetch current user profile from GraphQL', error);
+      await this.nbstoreService.realtime.configure({
+        endpoint: this.serverService.server.baseUrl,
+        authenticated: false,
+        isSelfHosted:
+          this.serverService.server.config$.value.type ===
+          ServerDeploymentType.Selfhosted,
+      });
+      return await this.nbstoreService.realtime.request(
+        'user.profile.get',
+        {},
+        { timeoutMs: 10_000 }
+      );
+    }
   }
 
   private async fetchAuthSession(): Promise<{ user: { id: string } | null }> {
