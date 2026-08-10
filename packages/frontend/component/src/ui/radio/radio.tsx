@@ -4,12 +4,17 @@ import clsx from 'clsx';
 import {
   createRef,
   memo,
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
 } from 'react';
 
+import {
+  isWithinPenTapSlop,
+  type PenDownPoint,
+} from '../../utils/pen-click-compat';
 import { withUnit } from '../../utils/with-unit';
 import * as styles from './styles.css';
 import type { RadioItem, RadioProps } from './types';
@@ -152,6 +157,55 @@ export const RadioGroup = memo(function RadioGroup({
     }
   }, [animate, value]);
 
+  // Pencil taps inside mobile modals often skip synthesized `click`. Call
+  // onChange directly using the shared pen-tap slop helper (same as menus).
+  const penDownRef = useRef<(PenDownPoint & { itemValue: string }) | null>(
+    null
+  );
+
+  const onPenPointerDown = useCallback(
+    (itemValue: string) => (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (event.pointerType !== 'pen' || disabled) {
+        return;
+      }
+      penDownRef.current = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        itemValue,
+      };
+    },
+    [disabled]
+  );
+
+  const onPenPointerUp = useCallback(
+    (itemValue: string) => (event: ReactPointerEvent<HTMLButtonElement>) => {
+      const penDown = penDownRef.current;
+      penDownRef.current = null;
+      if (
+        event.pointerType !== 'pen' ||
+        disabled ||
+        !penDown ||
+        penDown.pointerId !== event.pointerId ||
+        penDown.itemValue !== itemValue
+      ) {
+        return;
+      }
+      if (!isWithinPenTapSlop(penDown, event)) {
+        return;
+      }
+      if (itemValue === value) {
+        return;
+      }
+      onChange?.(itemValue);
+    },
+    [disabled, onChange, value]
+  );
+
+  const onPenPointerCancel = useCallback(() => {
+    penDownRef.current = null;
+  }, []);
+
   return (
     <RadixRadioGroup.Root
       value={value}
@@ -182,6 +236,9 @@ export const RadioGroup = memo(function RadioGroup({
             {...testId}
             {...item.attrs}
             disabled={disabled}
+            onPointerDown={onPenPointerDown(item.value)}
+            onPointerUp={onPenPointerUp(item.value)}
+            onPointerCancel={onPenPointerCancel}
           >
             <RadixRadioGroup.Indicator
               forceMount

@@ -8,17 +8,27 @@ export const root = style({
   minHeight: '100dvh',
   display: 'flex',
   flexDirection: 'column',
+  selectors: {
+    '&:has([data-mode="edgeless"])': {
+      height: '100dvh',
+      maxHeight: '100dvh',
+      overflow: 'hidden',
+    },
+  },
 });
 
 export const header = style({
   background: cssVarV2('layer/background/primary'),
   position: 'fixed',
   top: 0,
-  zIndex: 1,
+  zIndex: 100,
+  pointerEvents: 'auto',
 });
 
 export const headerContent = style({
-  maxWidth: `calc(100% - 200px)`,
+  // Title lives in the flex middle slot; keep it from taking pointer hits.
+  pointerEvents: 'none',
+  minWidth: 0,
 });
 export const headerTitle = style([
   bodyEmphasized,
@@ -26,6 +36,8 @@ export const headerTitle = style([
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    maxWidth: '100%',
+    pointerEvents: 'none',
 
     opacity: 0,
     transition: 'opacity 0.23s ease',
@@ -76,6 +88,10 @@ export const affineDocViewport = style({
       left: 0,
       right: 0,
       bottom: 0,
+      containerType: 'normal',
+      overflow: 'hidden',
+      overscrollBehavior: 'none',
+      touchAction: 'none',
     },
   },
 });
@@ -121,4 +137,28 @@ export const journalIconButton = style({
 
 export const journalDatePicker = style({
   background: cssVarV2('layer/background/primary'),
+});
+
+// When edgeless mode is active, prevent document-level scrolling
+// so native scrollView pan gestures don't scroll the page away from the canvas
+globalStyle('html:has([data-lock-document-scroll="true"])', {
+  overflow: 'hidden',
+  height: '100dvh',
+  overscrollBehavior: 'none',
+});
+
+globalStyle('body:has([data-lock-document-scroll="true"])', {
+  height: '100dvh',
+  minHeight: '100dvh',
+  overflow: 'hidden',
+  overscrollBehavior: 'none',
+});
+
+globalStyle('body:has([data-lock-document-scroll="true"]):has(>#app-tabs)', {
+  paddingBottom: 0,
+});
+
+// Prevent native touch handling on edgeless viewport so canvas handles all gestures
+globalStyle('[data-mode="edgeless"] .affine-edgeless-viewport', {
+  touchAction: 'none',
 });
