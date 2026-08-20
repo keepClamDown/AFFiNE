@@ -1,11 +1,14 @@
 import {
   deleteAccountMutation,
+  getCurrentUserQuery,
   removeAvatarMutation,
   ServerDeploymentType,
   updateUserProfileMutation,
   uploadAvatarMutation,
 } from '@affine/graphql';
+import type { CurrentUserProfileSnapshot } from '@affine/realtime';
 import { Store } from '@toeverything/infra';
+import { z } from 'zod';
 
 import type { GlobalState, NbstoreService } from '../../storage';
 import type { AuthSessionInfo } from '../entities/session';
@@ -13,20 +16,30 @@ import type { AuthProvider, SignInUserInfo } from '../provider/auth';
 import type { FetchService } from '../services/fetch';
 import type { GraphQLService } from '../services/graphql';
 import type { ServerService } from '../services/server';
+import { createUnsupportedServerVersionError } from './server-config';
 
-export interface AccountProfile {
-  id: string;
-  email: string;
-  name: string;
-  hasPassword: boolean;
+const AuthPreflightResponseSchema = z.object({
+  registered: z.boolean(),
+  methods: z.object({
+    password: z.object({ available: z.boolean() }),
+    magicLink: z.object({ available: z.boolean() }),
+    oauth: z.object({
+      available: z.boolean(),
+      providers: z.array(z.string()),
+    }),
+    passkey: z.object({
+      available: z.boolean(),
+      discoverable: z.boolean(),
+    }),
+  }),
+});
+
+export interface AccountProfile extends CurrentUserProfileSnapshot {
   authMethods?: {
     password: { bound: boolean };
     oauth: { bound: boolean; providers: string[] };
     passkey: { bound: boolean; count: number };
   };
-  avatarUrl: string | null;
-  emailVerified: string | null;
-  features?: string[];
 }
 
 export class AuthStore extends Store {
@@ -68,9 +81,10 @@ export class AuthStore extends Store {
           id: user.id,
           email: user.email,
           name: user.name,
-          hasPassword: Boolean(user.hasPassword),
+          hasPassword: user.hasPassword,
           avatarUrl: user.avatarUrl,
-          emailVerified: user.emailVerified ? 'true' : null,
+          emailVerified: user.emailVerified,
+          features: [],
         },
       },
     });
@@ -85,24 +99,29 @@ export class AuthStore extends Store {
   }
 
   async fetchSession() {
-    const { user } = await this.fetchService
+    const session = await this.fetchAuthSession();
+    if (!session.user) return { user: null };
+
+    const { currentUser: user } = await this.gqlService.gql({
+      query: getCurrentUserQuery,
+    });
+    if (!user || user.id !== session.user.id) {
+      throw new Error('User profile does not match auth session');
+    }
+    const authMethods = await this.fetchAuthMethods();
+    return { user: { ...user, authMethods } };
+  }
+
+  private async fetchAuthSession(): Promise<{ user: { id: string } | null }> {
+    return await this.fetchService
       .fetch('/api/auth/session', { cache: 'no-store' })
       .then(res => res.json());
-    const authMethods = user
-      ? await this.fetchService
-          .fetch('/api/auth/methods')
-          .then(res => (res.ok ? res.json() : undefined))
-      : undefined;
-    return {
-      user: user
-        ? {
-            ...user,
-            hasPassword: Boolean(user.hasPassword),
-            authMethods,
-            emailVerified: user.emailVerified ? 'true' : null,
-          }
-        : null,
-    };
+  }
+
+  private async fetchAuthMethods() {
+    return await this.fetchService
+      .fetch('/api/auth/methods')
+      .then(res => (res.ok ? res.json() : undefined));
   }
 
   async signInMagicLink(email: string, token: string) {
@@ -136,7 +155,22 @@ export class AuthStore extends Store {
   }
 
   async signOut() {
-    await this.authProvider.signOut();
+    try {
+      await this.authProvider.signOut();
+    } finally {
+      await this.deauthenticateRealtime();
+    }
+  }
+
+  async clearSession() {
+    try {
+      await this.authProvider.clearSession();
+    } finally {
+      await this.deauthenticateRealtime();
+    }
+  }
+
+  private async deauthenticateRealtime() {
     await this.nbstoreService.realtime.configure({
       endpoint: this.serverService.server.baseUrl,
       authenticated: false,
@@ -185,17 +219,14 @@ export class AuthStore extends Store {
       throw new Error(`Failed to check user by email: ${email}`);
     }
 
-    const data = (await res.json()) as {
-      registered: boolean;
-      methods: {
-        password: { available: boolean };
-        magicLink: { available: boolean };
-        oauth: { available: boolean; providers: string[] };
-        passkey: { available: boolean; discoverable: boolean };
-      };
-    };
+    const data = AuthPreflightResponseSchema.safeParse(await res.json());
+    if (!data.success) {
+      throw createUnsupportedServerVersionError(
+        this.serverService.server.config$.value.version
+      );
+    }
 
-    return data;
+    return data.data;
   }
 
   async deleteAccount() {

@@ -3,9 +3,13 @@ import Intelligents
 import UIKit
 import WebKit
 
-class AFFiNEViewController: CAPBridgeViewController, UIScrollViewDelegate {
+class AFFiNEViewController: CAPBridgeViewController, UIScrollViewDelegate, AffineThemeConfigurable {
   var intelligentsButton: IntelligentsButton?
-  private var isWebContentProcessTerminated = false
+  var appThemeUserInterfaceStyle: UIUserInterfaceStyle = .unspecified {
+    didSet {
+      overrideUserInterfaceStyle = appThemeUserInterfaceStyle
+    }
+  }
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -51,20 +55,18 @@ class AFFiNEViewController: CAPBridgeViewController, UIScrollViewDelegate {
     dismissIntelligentsButton()
   }
 
-  override func webViewConfiguration(for instanceConfiguration: InstanceConfiguration) -> WKWebViewConfiguration {
-    let configuration = super.webViewConfiguration(for: instanceConfiguration)
-    return configuration
-  }
-
-  override func webView(with frame: CGRect, configuration: WKWebViewConfiguration) -> WKWebView {
-    super.webView(with: frame, configuration: configuration)
+  override func didReceiveMemoryWarning() {
+    super.didReceiveMemoryWarning()
+    webView?.evaluateJavaScript("window.dispatchEvent(new Event('affine:memory-pressure'))")
   }
 
   override func capacitorDidLoad() {
     let plugins: [CAPPlugin] = [
+      AffineThemePlugin(associatedController: self),
       AuthPlugin(),
       CookiePlugin(),
       HashcashPlugin(),
+      ImagePickerPlugin(associatedController: self),
       NavigationGesturePlugin(),
       NbStorePlugin(),
       PayWallPlugin(associatedController: self),
@@ -73,6 +75,8 @@ class AFFiNEViewController: CAPBridgeViewController, UIScrollViewDelegate {
     plugins.forEach { bridge?.registerPluginInstance($0) }
   }
 
+  private static let intelligentsButtonRefreshInterval: TimeInterval = 0.5
+
   private var intelligentsButtonTimer: Timer?
   private var isCheckingIntelligentEligibility = false
 
@@ -80,7 +84,8 @@ class AFFiNEViewController: CAPBridgeViewController, UIScrollViewDelegate {
     super.viewDidAppear(animated)
     IntelligentContext.shared.webView = webView
     navigationController?.setNavigationBarHidden(false, animated: animated)
-    let timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+    checkEligibilityOfIntelligent()
+    let timer = Timer.scheduledTimer(withTimeInterval: Self.intelligentsButtonRefreshInterval, repeats: true) { [weak self] _ in
       self?.checkEligibilityOfIntelligent()
     }
     intelligentsButtonTimer = timer
@@ -90,16 +95,40 @@ class AFFiNEViewController: CAPBridgeViewController, UIScrollViewDelegate {
   private func checkEligibilityOfIntelligent() {
     guard !isCheckingIntelligentEligibility else { return }
     assert(intelligentsButton != nil)
-    guard intelligentsButton?.isHidden ?? false else { return }
+    guard let webView else {
+      if intelligentsButton?.isHidden == false {
+        dismissIntelligentsButton()
+      }
+      return
+    }
+
     isCheckingIntelligentEligibility = true
-    IntelligentContext.shared.webView = webView
-    IntelligentContext.shared.preparePresent { [self] result in
-      DispatchQueue.main.async {
-        defer { self.isCheckingIntelligentEligibility = false }
-        switch result {
-        case .failure: break
-        case .success:
-          self.presentIntelligentsButton()
+    Task { @MainActor [weak self, webView] in
+      guard let self else { return }
+
+      guard await PaywallAuthGuard.currentUserIdentifier(in: webView) != nil else {
+        if self.intelligentsButton?.isHidden == false {
+          self.dismissIntelligentsButton()
+        }
+        self.isCheckingIntelligentEligibility = false
+        return
+      }
+
+      guard self.intelligentsButton?.isHidden ?? false else {
+        self.isCheckingIntelligentEligibility = false
+        return
+      }
+
+      IntelligentContext.shared.webView = webView
+      IntelligentContext.shared.preparePresent(createSession: false) { [weak self] result in
+        DispatchQueue.main.async {
+          guard let self else { return }
+          defer { self.isCheckingIntelligentEligibility = false }
+          switch result {
+          case .failure: break
+          case .success:
+            self.presentIntelligentsButton()
+          }
         }
       }
     }
@@ -120,16 +149,14 @@ class AFFiNEViewController: CAPBridgeViewController, UIScrollViewDelegate {
     scrollView.zoomScale = 1.0
   }
 
-  func scrollViewDidScroll(_ scrollView: UIScrollView) {
-    if scrollView.contentOffset != .zero {
-      scrollView.contentOffset = .zero
-    }
-  }
-
   // MARK: - Web Content Process Crash Recovery
 
+  // NOTE: Capacitor's CAPBridgeViewController owns the WKWebView
+  // navigationDelegate (it assigns its own WebViewDelegationHandler), so this
+  // override is NOT called in practice — Capacitor's handler logs
+  // "⚡️ WebView process terminated" and reloads instead. Kept as defensive
+  // fallback, matching the prior baseline behavior.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-    isWebContentProcessTerminated = true
     webView.reload()
   }
 }

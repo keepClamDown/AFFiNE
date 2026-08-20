@@ -212,7 +212,7 @@ export class EdgelessRootBlockComponent extends BlockComponent<
           currentCenter.y
         );
 
-        viewport.setZoom(zoom, new Point(baseX, baseY));
+        viewport.setZoom(zoom, new Point(baseX, baseY), false, true, true);
 
         return false;
       })
@@ -351,12 +351,16 @@ export class EdgelessRootBlockComponent extends BlockComponent<
           );
 
           const zoom = normalizeWheelDeltaY(e.deltaY, viewport.zoom);
-          viewport.setZoom(zoom, new Point(baseX, baseY), true);
+          viewport.setZoom(zoom, new Point(baseX, baseY), true, true, true);
           e.stopPropagation();
         }
         // pan
         else {
-          const simulateHorizontalScroll = IS_WINDOWS && e.shiftKey;
+          // Enable Shift+wheel horizontal scroll on Windows (no native deltaX),
+          // and on any platform when using a mouse without horizontal scroll
+          // (deltaX === 0 means no native horizontal input, e.g. external mouse on macOS/Linux).
+          const simulateHorizontalScroll =
+            e.shiftKey && (IS_WINDOWS || e.deltaX === 0);
           const dx = simulateHorizontalScroll
             ? e.deltaY / viewport.zoom
             : e.deltaX / viewport.zoom;
