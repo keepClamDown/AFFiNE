@@ -14,6 +14,12 @@ import UniformTypeIdentifiers
 
 private let loadingIndicator = " ●"
 
+private enum AIRoutingDecision {
+  case serverOnly
+  case preferLocal
+  case fallbackToServer(reason: String)
+}
+
 private extension InputBoxData {
   var hasAttachment: Bool {
     if !imageAttachments.isEmpty { return false }
@@ -26,6 +32,18 @@ private extension InputBoxData {
 public extension ChatManager {
   @MainActor
   func startUserRequest(editorData: InputBoxData, sessionId: String) {
+    switch resolveAIRoutingDecision() {
+    case .serverOnly:
+      break
+    case .preferLocal:
+      appendLocalAIFallbackNotice(
+        sessionId: sessionId,
+        reason: "Local model is ready, but native invocation is not wired yet. This request will continue with cloud AI for now."
+      )
+    case let .fallbackToServer(reason):
+      appendLocalAIFallbackNotice(sessionId: sessionId, reason: reason)
+    }
+
     append(sessionId: sessionId, UserMessageCellViewModel(
       id: .init(),
       content: editorData.text,
@@ -66,6 +84,51 @@ public extension ChatManager {
 }
 
 private extension ChatManager {
+  func resolveAIRoutingDecision() -> AIRoutingDecision {
+    guard let localAIState = IntelligentContext.shared.localAIState else {
+      return .serverOnly
+    }
+
+    let invocationAvailable =
+      (localAIState["invocationAvailable"] as? Bool) ?? false
+    let models = localAIState["models"] as? [[String: Any]] ?? []
+    let hasDownloadedModel = models.contains {
+      ($0["status"] as? String) == "downloaded"
+    }
+
+    guard hasDownloadedModel else {
+      return .serverOnly
+    }
+
+    if invocationAvailable {
+      return .preferLocal
+    }
+
+    return .fallbackToServer(
+      reason: "A local model is downloaded on this device, but local inference is not available yet. This request will use cloud AI instead."
+    )
+  }
+
+  @MainActor
+  func appendLocalAIFallbackNotice(sessionId: String, reason: String) {
+    let hasExistingNotice = viewModels[sessionId]?.values.contains { viewModel in
+      guard let systemMessage = viewModel as? SystemMessageCellViewModel else {
+        return false
+      }
+      return systemMessage.content == reason
+    } ?? false
+
+    guard !hasExistingNotice else {
+      return
+    }
+
+    append(sessionId: sessionId, SystemMessageCellViewModel(
+      id: .init(),
+      content: reason,
+      timestamp: .init()
+    ))
+  }
+
   func prepareContext(
     workspaceId: String,
     sessionId: String,

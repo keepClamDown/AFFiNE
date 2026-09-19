@@ -18,6 +18,8 @@ extension IntelligentContext {
       (.currentServerBaseUrl, .getCurrentServerBaseUrl),
       (.currentI18nLocale, .getCurrentI18nLocale),
       (.currentAiButtonFeatureFlag, .getAiButtonFeatureFlag),
+      (.currentAiAccessState, .getCurrentAIAccessState),
+      (.currentLocalAiState, .getCurrentLocalAIState),
     ]
     for (key, script) in keysAndScripts {
       DispatchQueue.main.async {

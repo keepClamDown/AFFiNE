@@ -18,12 +18,14 @@ enum BridgedWindowScript: String {
   case getCurrentWorkspaceId = "window.getCurrentWorkspaceId();"
   case getCurrentDocId = "window.getCurrentDocId();"
   case getAiButtonFeatureFlag = "window.getAiButtonFeatureFlag();"
+  case getCurrentAIAccessState = "return await window.getCurrentAIAccessState();"
+  case getCurrentLocalAIState = "return await window.getCurrentLocalAIState();"
   case getCurrentI18nLocale = "window.getCurrentI18nLocale();"
   case createNewDocByMarkdownInCurrentWorkspace = "return await window.createNewDocByMarkdownInCurrentWorkspace(markdown, title);"
 
   var requiresAsyncContext: Bool {
     switch self {
-    case .getCurrentDocContentInMarkdown, .createNewDocByMarkdownInCurrentWorkspace: true
+    case .getCurrentDocContentInMarkdown, .getCurrentAIAccessState, .getCurrentLocalAIState, .createNewDocByMarkdownInCurrentWorkspace: true
     default: false
     }
   }

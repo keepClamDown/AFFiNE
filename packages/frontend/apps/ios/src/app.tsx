@@ -71,6 +71,7 @@ import { BlocksuiteMenuConfigProvider } from './bs-menu-config';
 import { ModalConfigProvider } from './modal-config';
 import { Auth } from './plugins/auth';
 import { Hashcash } from './plugins/hashcash';
+import { LocalAI } from './plugins/local-ai';
 import { NbStoreNativeDBApis } from './plugins/nbstore';
 import { PayWall } from './plugins/paywall';
 import { Preview } from './plugins/preview';
@@ -238,16 +239,91 @@ registerNativePreviewHandlers({
   renderTypstSvg: request => Preview.renderTypstSvg(request),
 });
 
-// ------ some apis for native ------
-(window as any).getCurrentServerBaseUrl = () => {
+const getCurrentServerForNative = () => {
   const globalContextService = frameworkProvider.get(GlobalContextService);
   const currentServerId = globalContextService.globalContext.serverId.get();
   const serversService = frameworkProvider.get(ServersService);
   const defaultServerService = frameworkProvider.get(DefaultServerService);
-  const currentServer =
+  return (
     (currentServerId ? serversService.server$(currentServerId).value : null) ??
-    defaultServerService.server;
-  return currentServer.baseUrl;
+    defaultServerService.server
+  );
+};
+
+const getCurrentAIAccessState = async () => {
+  const featureFlagService = frameworkProvider.get(FeatureFlagService);
+  const globalContextService = frameworkProvider.get(GlobalContextService);
+  const currentServer = getCurrentServerForNative();
+  const subscriptionService = currentServer.scope.get(SubscriptionService);
+
+  const featureEnabled = featureFlagService.flags.enable_ai.value;
+  const mobileFeatureEnabled =
+    featureFlagService.flags.enable_mobile_ai_button.value;
+  const serverCopilotEnabled = !!currentServer.features$.value?.copilot;
+  const workspaceId = globalContextService.globalContext.workspaceId.get();
+  const isAuthenticated = !!currentServer.account$.value?.id;
+
+  let subscriptionStatus: string | null = null;
+  try {
+    await subscriptionService.subscription.waitForRevalidation();
+    subscriptionStatus =
+      subscriptionService.subscription.ai$.value?.status ?? null;
+  } catch (error) {
+    console.error('Failed to revalidate AI subscription state', error);
+  }
+
+  const enabled =
+    featureEnabled &&
+    mobileFeatureEnabled &&
+    serverCopilotEnabled &&
+    isAuthenticated &&
+    !!workspaceId;
+
+  let reason = 'enabled';
+  if (!featureEnabled) {
+    reason = 'ai-feature-disabled';
+  } else if (!mobileFeatureEnabled) {
+    reason = 'mobile-ai-button-disabled';
+  } else if (!serverCopilotEnabled) {
+    reason = 'server-copilot-disabled';
+  } else if (!isAuthenticated) {
+    reason = 'authentication-required';
+  } else if (!workspaceId) {
+    reason = 'workspace-required';
+  }
+
+  return {
+    enabled,
+    reason,
+    featureEnabled,
+    mobileFeatureEnabled,
+    serverCopilotEnabled,
+    isAuthenticated,
+    workspaceId,
+    subscriptionStatus,
+    bypassSubscriptionModelGate: BUILD_CONFIG.isIOS,
+  };
+};
+
+const getCurrentLocalAIState = async () => {
+  try {
+    return await LocalAI.getState();
+  } catch (error) {
+    console.error('Failed to read LocalAI state', error);
+    return {
+      models: [],
+      modelDirectory: '',
+      runtimeAvailable: false,
+      invocationAvailable: false,
+      downloadResumableInBackground: false,
+      error: 'local-ai-state-unavailable',
+    };
+  }
+};
+
+// ------ some apis for native ------
+(window as any).getCurrentServerBaseUrl = () => {
+  return getCurrentServerForNative().baseUrl;
 };
 (window as any).getCurrentI18nLocale = () => {
   return I18n.language;
@@ -255,6 +331,12 @@ registerNativePreviewHandlers({
 (window as any).getAiButtonFeatureFlag = () => {
   const featureFlagService = frameworkProvider.get(FeatureFlagService);
   return featureFlagService.flags.enable_mobile_ai_button.value;
+};
+(window as any).getCurrentAIAccessState = async () => {
+  return await getCurrentAIAccessState();
+};
+(window as any).getCurrentLocalAIState = async () => {
+  return await getCurrentLocalAIState();
 };
 (window as any).getCurrentWorkspaceId = () => {
   const globalContextService = frameworkProvider.get(GlobalContextService);

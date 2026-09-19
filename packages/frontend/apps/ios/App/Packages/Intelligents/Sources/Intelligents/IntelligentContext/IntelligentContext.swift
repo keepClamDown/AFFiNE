@@ -41,6 +41,23 @@ public class IntelligentContext {
     case currentServerBaseUrl
     case currentI18nLocale
     case currentAiButtonFeatureFlag
+    case currentAiAccessState
+    case currentLocalAiState
+  }
+
+  var aiAccessState: [String: Any]? {
+    webViewMetadata[.currentAiAccessState] as? [String: Any]
+  }
+
+  var localAIState: [String: Any]? {
+    webViewMetadata[.currentLocalAiState] as? [String: Any]
+  }
+
+  var isAIEnabled: Bool {
+    if let enabled = aiAccessState?["enabled"] as? Bool {
+      return enabled
+    }
+    return (webViewMetadata[.currentAiButtonFeatureFlag] as? Bool) ?? false
   }
 
   @Published public private(set) var currentSession: ChatSessionObject?
@@ -86,7 +103,7 @@ public class IntelligentContext {
       webViewGroup.wait()
       webViewMetadata = webViewMetadataResult
 
-      if webViewMetadataResult[.currentAiButtonFeatureFlag] as? Bool == false {
+      if !isAIEnabled {
         completion(.failure(IntelligentError.featureClosed))
         return
       }
